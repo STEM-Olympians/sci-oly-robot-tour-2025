@@ -1,39 +1,10 @@
 
+// IMU setup
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
-//#include "MPU6050_6Axis_MotionApps612.h" // Uncomment this library to work with DMP 6.12 and comment on the above library.
 
-/* MPU6050 default I2C address is 0x68*/
 MPU6050 mpu;
-//MPU6050 mpu(0x69); //Use for AD0 high
-//MPU6050 mpu(0x68, &Wire1); //Use for AD0 low, but 2nd Wire (TWI/I2C) object.
-
-/* OUTPUT FORMAT DEFINITION-------------------------------------------------------------------------------------------
-- Use "OUTPUT_READABLE_QUATERNION" for quaternion commponents in [w, x, y, z] format. Quaternion does not 
-suffer from gimbal lock problems but is harder to parse or process efficiently on a remote host or software 
-environment like Processing.
-
-- Use "OUTPUT_READABLE_EULER" for Euler angles (in degrees) output, calculated from the quaternions coming 
-from the FIFO. EULER ANGLES SUFFER FROM GIMBAL LOCK PROBLEM.
-
-- Use "OUTPUT_READABLE_YAWPITCHROLL" for yaw/pitch/roll angles (in degrees) calculated from the quaternions
-coming from the FIFO. THIS REQUIRES GRAVITY VECTOR CALCULATION.
-YAW/PITCH/ROLL ANGLES SUFFER FROM GIMBAL LOCK PROBLEM.
-
-- Use "OUTPUT_READABLE_REALACCEL" for acceleration components with gravity removed. The accel reference frame
-is not compensated for orientation. +X will always be +X according to the sensor.
-
-- Use "OUTPUT_READABLE_WORLDACCEL" for acceleration components with gravity removed and adjusted for the world
-reference frame. Yaw is relative if there is no magnetometer present.
-
--  Use "OUTPUT_TEAPOT" for output that matches the InvenSense teapot demo. 
--------------------------------------------------------------------------------------------------------------------------------*/
 #define OUTPUT_READABLE_YAWPITCHROLL
-//#define OUTPUT_READABLE_QUATERNION
-//#define OUTPUT_READABLE_EULER
-//#define OUTPUT_READABLE_REALACCEL
-//#define OUTPUT_READABLE_WORLDACCEL
-//#define OUTPUT_TEAPOT
 
 int const INTERRUPT_PIN = 13;  // Define the interruption #13 pin
 bool blinkState;
@@ -79,9 +50,12 @@ int rightEncoderPin2 = 3;  // red
 
 volatile int lastLeftEncoded = 0;
 volatile long leftEncoderValue = 0;
-volatile int lastRightEncoded = 0;                                                                 
+volatile int lastRightEncoded = 0;
 volatile long rightEncoderValue = 0;
 
+
+
+// FIXME: Check if the setup is < 3 sec, because robot has gotta start moving 3 sec after we hit start
 
 void setup() {
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
@@ -92,6 +66,7 @@ void setup() {
 #endif
 
   Serial.begin(115200);  //115200 is required for Teapot Demo output
+
   while (!Serial)
     ;
 
@@ -110,12 +85,6 @@ void setup() {
     Serial.println("MPU6050 connection successful");
   }
 
-  /*Wait for Serial input*/
-  // Serial.println(F("\nSend any character to begin: "));
-  // while (Serial.available() && Serial.read()); // Empty buffer
-  // while (!Serial.available());                 // Wait for data
-  // while (Serial.available() && Serial.read()); // Empty buffer again
-
   /* Initializate and configure the DMP*/
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
@@ -130,8 +99,6 @@ void setup() {
   mpu.setXAccelOffset(0);
   mpu.setYAccelOffset(0);
   mpu.setZAccelOffset(0);
-
-  // FIXME: Check if the setup is < 3 sec, because robot has gotta start moving 3 sec after we hit start
 
   /* Making sure it worked (returns 0 if so) */
   if (devStatus == 0) {
@@ -187,89 +154,30 @@ void loop() {
 
   /* Read a packet from FIFO */
   if (mpu.dmpGetCurrentFIFOPacket(FIFOBuffer)) {  // Get the Latest packet
-#ifdef OUTPUT_READABLE_YAWPITCHROLL
+
     /* Display Euler angles in degrees */
     mpu.dmpGetQuaternion(&q, FIFOBuffer);
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
     Serial.print("ypr\t");
+    //FIXME: not really a fixme, but I assume this one is yaw,
+    // we want this one for robot angle
+    // See below for float gyroAngle
     Serial.print(ypr[0] * 180 / M_PI);
+
+
     Serial.print("\t");
     Serial.print(ypr[1] * 180 / M_PI);
     Serial.print("\t");
     Serial.println(ypr[2] * 180 / M_PI);
 
     float gyroAngle = ypr[0] * 180 / M_PI;
-#endif
 
-#ifdef OUTPUT_READABLE_QUATERNION
-    /* Display Quaternion values in easy matrix form: [w, x, y, z] */
-    mpu.dmpGetQuaternion(&q, FIFOBuffer);
-    Serial.print("quat\t");
-    Serial.print(q.w);
-    Serial.print("\t");
-    Serial.print(q.x);
-    Serial.print("\t");
-    Serial.print(q.y);
-    Serial.print("\t");
-    Serial.println(q.z);
-#endif
+    float leftDistance = getDistanceCentimeters(leftEncoderValue);
+    float rightDistance = getDistanceCentimeters(rightEncoderValue);
 
-#ifdef OUTPUT_READABLE_EULER
-    /* Display Euler angles in degrees */
-    mpu.dmpGetQuaternion(&q, FIFOBuffer);
-    mpu.dmpGetEuler(euler, &q);
-    Serial.print("euler\t");
-    Serial.print(euler[0] * 180 / M_PI);
-    Serial.print("\t");
-    Serial.print(euler[1] * 180 / M_PI);
-    Serial.print("\t");
-    Serial.println(euler[2] * 180 / M_PI);
-#endif
+    // FIXME: Insert driving logic here
 
-#ifdef OUTPUT_READABLE_REALACCEL
-    /* Display real acceleration, adjusted to remove gravity */
-    mpu.dmpGetQuaternion(&q, FIFOBuffer);
-    mpu.dmpGetAccel(&aa, FIFOBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-    Serial.print("areal\t");
-    Serial.print(aaReal.x);
-    Serial.print("\t");
-    Serial.print(aaReal.y);
-    Serial.print("\t");
-    Serial.println(aaReal.z);
-#endif
-
-#ifdef OUTPUT_READABLE_WORLDACCEL
-    /* Display initial world-frame acceleration, adjusted to remove gravity
-      and rotated based on known orientation from Quaternion */
-    mpu.dmpGetQuaternion(&q, FIFOBuffer);
-    mpu.dmpGetAccel(&aa, FIFOBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-    mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
-    Serial.print("aworld\t");
-    Serial.print(aaWorld.x);
-    Serial.print("\t");
-    Serial.print(aaWorld.y);
-    Serial.print("\t");
-    Serial.println(aaWorld.z);
-#endif
-
-#ifdef OUTPUT_TEAPOT
-    /* Display quaternion values in InvenSense Teapot demo format */
-    teapotPacket[2] = FIFOBuffer[0];
-    teapotPacket[3] = FIFOBuffer[1];
-    teapotPacket[4] = FIFOBuffer[4];
-    teapotPacket[5] = FIFOBuffer[5];
-    teapotPacket[6] = FIFOBuffer[8];
-    teapotPacket[7] = FIFOBuffer[9];
-    teapotPacket[8] = FIFOBuffer[12];
-    teapotPacket[9] = FIFOBuffer[13];
-    Serial.write(teapotPacket, 14);
-    teapotPacket[11]++;  // PacketCount, loops at 0xFF on purpose
-#endif
 
     /* Blink LED to indicate activity */
     blinkState = !blinkState;
@@ -303,23 +211,26 @@ void updateRightEncoder() {
 }
 
 
-// Stop the motor
+// sSpeed must be between 0-255
+// The best way to do this, is to find a consistent power, that we know will go a certain distance for a certain time
+// Then, we can just stop for the rest of the time
+// That way, we can be pretty accurate with our movements
 void driveSpeed(double speed) {
-  if(speed == 0) {
+  if (speed == 0) {
     stop();
     return;
-  } 
+  }
 
-  if( speed > 0){
+  if (speed > 0) {
     digitalWrite(LeftMotFwd, HIGH);
-  digitalWrite(LeftMotRev, LOW);
-  digitalWrite(RightMotFwd, HIGH);
-  digitalWrite(RightMotRev, LOW);
-  }else {
+    digitalWrite(LeftMotRev, LOW);
+    digitalWrite(RightMotFwd, HIGH);
+    digitalWrite(RightMotRev, LOW);
+  } else {
     digitalWrite(LeftMotFwd, LOW);
-  digitalWrite(LeftMotRev, HIGH);
-  digitalWrite(RightMotFwd, LOW);
-  digitalWrite(RightMotRev, HIGH);
+    digitalWrite(LeftMotRev, HIGH);
+    digitalWrite(RightMotFwd, LOW);
+    digitalWrite(RightMotRev, HIGH);
   }
   analogWrite(LeftSpeedPin, speed);
   analogWrite(RightSpeedPin, speed);
@@ -337,87 +248,98 @@ void stop() {
 }
 
 
-    // Get the encoder count
-    long getEncoderCount() {
-        return encoderCount;
-    }
 
-    double getRevolutions(){
-      // Find how many ticks in a rev
-        return encoderCount / 2048; // FIXME
-    }
+double getDistanceCentimeters(long encoderValue) {
 
-    double getDistanceCentimeters(){
-      // Distance is revolutions * circumference (pi * diameter (inches)) * 2.54 cm/inches
-        return this->getRevolutions() * PI * 2.375  * 2.54; // FIXME
-    }
-    
-    // Reset encoder count
-    void resetEncoder() {
-        encoderCount = 0;
-    }
+  // FIXME: Find the real number of ticks in one revolution
+  double revolutions = encoderValue / 5026;
 
-    void setDistanceTarget(double targetCenti, double time){
-      this->resetEncoder();
-      targetCentimeters = targetCenti;
-      targetTimeMillis = time;
-    }
-
-    void setAngleTarget(double targetAng, double time){
-      targetAngle = targetAng;
-      targetTimeMillis = time;
-      
-    }
-
-
-
-    /** This will also reset your position for more accurate tracking*/
-    void setTargetCentimeters(double targetCenti){
-      this->resetEncoder();
-      targetCentimeters = targetCenti;
-    }
-
-    double centiError(){
-        return (this -> getDistanceCentimeters()) - currentPosition;
-    }
-
-    bool reachedTargetCentimeter(){
-        double currentPosition = getDistanceCentimeters();
-        return abs(targetCentimeters - currentPosition) < TARGET_CENTIMETER_EPSILON
-    }
-
-    void reachedTargetAngle(){
-        // Implement gyro reading
-
-
-        // double currentAngle = 
-        // return abs(targetCentimeters - currentPosition) < TARGET_CENTIMETER_EPSILON
-    }
-
-    /** Speed is -1 to 1*/
-    void driveToTarget() {
-
-      if(this -> reachedTargetCentimeter()) {
-        this -> drive(0);
-        return;
-      }
-
-      double currentPosition = getDistanceCentimeters();
-
-      if(target)
-
-
-      // Get difference between current position and target position
-      // double frontLeftPower = DriveSubsystem.CalculateDirection(subsystem.getMotorPosition() - target, speed); 
-      // double frontRightPower = frontLeftPower; 
-
-      // if (frontLeftPower == 0) {
-      //   // isFinished = true;
-      //   subsystem.resetMotorPosition();
-      // }
-
-      // // Set motor powers
-      // subsystem.drive(frontRightPower, frontLeftPower);
-  }
+  // Distance is revolutions * circumference (pi * diameter (inches)) * 2.54 cm/inches
+  return revolutions * (PI * 2.375) * 2.54;
 }
 
+// Reset encoder count
+void resetLeftEncoder() {
+  leftEncoderValue = 0;
+}
+
+// Reset encoder count
+void resetRightEncoder() {
+  leftEncoderValue = 0;
+}
+
+void resetBothEncoders() {
+  resetLeftEncoder();
+  resetRightEncoder();
+}
+
+// TODO:
+// #1: Figure out how you want to store the directions
+// #2: Figure out how to drive a certain distance, and calculate the time from that
+// #3: Figure out how to rest for a certain duration to fit the time requirements
+// #4: Figure out how to rotate to a certain angle (probably just 90 degrees), while staying in place
+// #5: Fix the timings for the angles as well
+
+
+// All of these other things were stuff I started working on, but then realized you probably have your own ideas on how to do them
+// So, I shall leave them here if you want inspiration, but they might be somewhat incomplete
+// Also, your code makes an appearance at the end lol, because I was in the middle of porting it
+
+//     void setDistanceTarget(double targetCenti, double time){
+//       resetBothEncoders();
+//       targetCentimeters = targetCenti;
+//       targetTimeMillis = time;
+//     }
+
+//     void setAngleTarget(double targetAng, double time){
+//       targetAngle = targetAng;
+//       targetTimeMillis = time;
+//     }
+
+//     /** This will also reset your position for more accurate tracking*/
+//     void setTargetCentimeters(double targetCenti){
+//       this->resetEncoder();
+//       targetCentimeters = targetCenti;
+//     }
+
+//     double centiError(){
+//         return (this -> getDistanceCentimeters()) - currentPosition;
+//     }
+
+//     bool reachedTargetCentimeter(){
+//         double currentPosition = getDistanceCentimeters();
+//         return abs(targetCentimeters - currentPosition) < TARGET_CENTIMETER_EPSILON
+//     }
+
+//     void reachedTargetAngle(){
+//         // Implement gyro reading
+
+
+//         // double currentAngle =
+//         // return abs(targetCentimeters - currentPosition) < TARGET_CENTIMETER_EPSILON
+//     }
+
+//     /** Speed is -1 to 1*/
+//     void driveToTarget() {
+
+//       if(this -> reachedTargetCentimeter()) {
+//         this -> drive(0);
+//         return;
+//       }
+
+//       double currentPosition = getDistanceCentimeters();
+
+
+//       // Get difference between current position and target position
+//       // double frontLeftPower = DriveSubsystem.CalculateDirection(subsystem.getMotorPosition() - target, speed);
+//       // double frontRightPower = frontLeftPower;
+
+//       // if (frontLeftPower == 0) {
+//       //   // isFinished = true;
+//       //   subsystem.resetMotorPosition();
+//       // }
+
+//       // // Set motor powers
+//       // subsystem.drive(frontRightPower, frontLeftPower);
+//   }
+// }

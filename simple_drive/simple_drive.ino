@@ -35,17 +35,37 @@ void setup() {
   pinMode(rightEncoderPin1, INPUT_PULLUP);
   pinMode(rightEncoderPin2, INPUT_PULLUP);
 
-  attachInterrupt(digitalPinToInterrupt(leftEncoderPin1), updateLeftEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(leftEncoderPin2), updateLeftEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(rightEncoderPin1), updateRightEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(rightEncoderPin2), updateRightEncoder, CHANGE);
+// Left encoder (pins 6, 7) use pin change interrupts
+attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(leftEncoderPin1), updateLeftEncoder, CHANGE);
+attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(leftEncoderPin2), updateLeftEncoder, CHANGE);
+
+// Right encoder (pins 2, 3) use external interrupts
+attachInterrupt(digitalPinToInterrupt(rightEncoderPin1), updateRightEncoder, CHANGE);
+attachInterrupt(digitalPinToInterrupt(rightEncoderPin2), updateRightEncoder, CHANGE);
+
+  // attachInterrupt(digitalPinToInterrupt(leftEncoderPin1), updateLeftEncoder, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(leftEncoderPin2), updateLeftEncoder, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(rightEncoderPin1), updateRightEncoder, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(rightEncoderPin2), updateRightEncoder, CHANGE);
 
 }
 
 void loop() {
-  analogWrite(LeftSpeedPin, 150); // Adjust left motor speed from 0-255
-  analogWrite(RightSpeedPin, 150); // Adjust right motor speed from 0-255
+  analogWrite(LeftSpeedPin, 255); // Adjust left motor speed from 0-255
+  analogWrite(RightSpeedPin, 130); // Adjust right motor speed from 0-255
 
+  noInterrupts();
+
+  long left = leftEncoderValue;
+  long right = rightEncoderValue;
+  interrupts();
+  Serial.print("left - ");
+  Serial.println(left);
+    Serial.print("right - ");
+  Serial.println(right);
+
+
+  delay(1000);
 
   for (int i = 0; i <= 500; i++) {
     digitalWrite(LeftMotFwd, HIGH);
@@ -75,6 +95,7 @@ void loop() {
 }
 
 void updateLeftEncoder() {
+
   int MSB = digitalRead(leftEncoderPin1);
   int LSB = digitalRead(leftEncoderPin2);
   int encoded = (MSB << 1) | LSB;
@@ -87,6 +108,7 @@ void updateLeftEncoder() {
 }
 
 void updateRightEncoder() {
+
   int MSB = digitalRead(rightEncoderPin1);
   int LSB = digitalRead(rightEncoderPin2);
   int encoded = (MSB << 1) | LSB;

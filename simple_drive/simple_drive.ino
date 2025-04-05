@@ -1,9 +1,10 @@
 #include <Wire.h>
 #include <MPU6050.h>
+#include <PinChangeInterrupt.h>
 
 
-#define LeftMotFwd 10  // white
-#define LeftMotRev 9  // black
+#define LeftMotFwd 9  // white
+#define LeftMotRev 10  // black
 #define RightMotFwd 12 // brown
 #define RightMotRev 5 // red
 #define LeftSpeedPin 11 // grey
